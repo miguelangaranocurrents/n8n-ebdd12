@@ -431,6 +431,27 @@ export const extendTransform = (expression: string): { code: string } | undefine
 			},
 		});
 
+		// JS forbids mixing `??` with `&&`/`||` without parentheses, but recast's
+		// precedence-based reprint drops them (`a ?? (b && c)` becomes
+		// `a ?? b && c`), so wrap such operands explicitly.
+		visit(ast, {
+			visitLogicalExpression(path) {
+				this.traverse(path);
+
+				const node = path.node;
+				const isNullish = node.operator === '??';
+				const needsGroup = (child: ExpressionKind) =>
+					child.type === 'LogicalExpression' && (child.operator === '??') !== isNullish;
+
+				if (needsGroup(node.left)) {
+					node.left = types.builders.parenthesizedExpression(node.left);
+				}
+				if (needsGroup(node.right)) {
+					node.right = types.builders.parenthesizedExpression(node.right);
+				}
+			},
+		});
+
 		return print(ast);
 	} catch (e) {
 		return;
